@@ -1,0 +1,88 @@
+select *
+from PortfolioProject..covid_death
+order by 3,4
+
+
+--select *
+--from PortfolioProject..covid_vac
+--order by 3,4
+
+select location, date, total_cases, new_cases, total_deaths, population_density
+from PortfolioProject..covid_death
+order by 1,2
+
+-- Total Cases vs Total Deaths
+-- Chances of dying if you contract covid in Austria
+select location, date, total_cases, total_deaths, (total_deaths/total_cases)*100 as Death_Percentage
+from PortfolioProject..covid_death
+where location = 'Austria'
+order by 1,2
+
+-- Total Cases vs Population
+-- SHows what percentage of population got covid
+select location, date, population, total_cases,  (total_cases/population)*100 as CasePercentage
+from PortfolioProject..covid_death
+where location = 'Austria'
+order by 1,2
+
+-- Countries with highest infection rates compared to population
+
+select location, population, max(total_cases) as HighestInfectionCount,  max((total_cases/population))*100 as PercentPopulationInfected
+from PortfolioProject..covid_death
+group by population, location
+order by PercentPopulationInfected desc
+
+-- Countries with Highest Death Count per Population
+select location, max(cast(total_deaths as int)) as DeathCount,  max((total_deaths/population))*100 as DeathsPercentage
+from PortfolioProject..covid_death
+where continent is not null
+group by location
+order by DeathCount desc
+
+-- Death Count by Continent
+select location, max(cast(total_deaths as int)) as DeathCount 
+from PortfolioProject..covid_death
+where continent is null
+group by location
+order by DeathCount desc
+
+-- Global Numbers
+select sum(new_cases) as total_cases, sum(cast(new_deaths as int)) as total_deaths,
+sum(cast(new_deaths as int)) / sum(new_cases)*100 as DeathPercentage
+from PortfolioProject..covid_death
+where continent is not null
+order by 1,2
+
+
+--CTE 
+
+with PopvsVac (continent, location, date, population, new_vaccinations, RollingPeopleVaccinated)
+as
+(
+-- Total Population vs Vaccinations
+select d.continent, d.location, d.date, d.population, v.new_vaccinations,
+sum(cast(v.new_vaccinations as bigint)) over (partition by d.location order by d.location, d.date) as RollingPeopleVaccinated
+--(RollingPeopleVaccinated/population)*100
+from PortfolioProject..covid_death as d
+join PortfolioProject..covid_vac as v
+on d.location = v.location
+and d.date = v.date
+where d.continent is not null
+--order by 2,3
+)
+select *, (RollingPeopleVaccinated/population)*100 as PercentageVaccinated
+from PopvsVac
+
+
+-- Creating view for visualizations
+
+create view PercenPopVaccinated as
+select d.continent, d.location, d.date, d.population, v.new_vaccinations,
+sum(cast(v.new_vaccinations as bigint)) over (partition by d.location order by d.location, d.date) as RollingPeopleVaccinated
+--(RollingPeopleVaccinated/population)*100
+from PortfolioProject..covid_death as d
+join PortfolioProject..covid_vac as v
+on d.location = v.location
+and d.date = v.date
+where d.continent is not null
+--order by 2,3
