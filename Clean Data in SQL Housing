@@ -1,0 +1,147 @@
+select *
+from PortfolioProject..housing
+
+
+-- Standardize Date format
+
+select SaleDate, convert(date, saledate)
+from PortfolioProject..housing
+
+
+ALTER TABLE housing
+ALTER COLUMN SaleDate date;
+
+ALTER TABLE housing
+ADD DateConverted date
+
+update housing
+set DateConverted = CONVERT(date, SaleDate)
+
+
+
+-- Populate Property Address data
+
+select PropertyAddress
+from PortfolioProject..housing
+where PropertyAddress is null
+
+select a.ParcelID, a.PropertyAddress, b.ParcelID, b.PropertyAddress, ISNULL(a.PropertyAddress,b.PropertyAddress)
+from PortfolioProject..housing as a
+join PortfolioProject..housing as b
+on a.ParcelID = b.ParcelID
+and a.[UniqueID ] <> b.[UniqueID ]
+where a.PropertyAddress is null
+
+update a
+set PropertyAddress = ISNULL(a.PropertyAddress,b.PropertyAddress)
+from PortfolioProject..housing as a
+join PortfolioProject..housing as b
+    on a.ParcelID = b.ParcelID
+    and a.[UniqueID ] <> b.[UniqueID ]
+where a.PropertyAddress is null
+
+
+-- Breaking our address into individual columns (Address, City, State)
+
+select PropertyAddress
+from PortfolioProject..housing
+
+select
+SUBSTRING(PropertyAddress, 1, CHARINDEX(',', PropertyAddress)-1) as Address,
+SUBSTRING(PropertyAddress, CHARINDEX(',',PropertyAddress)+1, len(PropertyAddress)) as Ind
+from PortfolioProject..housing
+
+ALTER TABLE PortfolioProject..housing
+add PropertySplitAddress nvarchar(255)
+
+UPDATE PortfolioProject..housing
+set PropertySplitAddress = SUBSTRING(PropertyAddress, 1, CHARINDEX(',', PropertyAddress)-1)
+
+ALTER TABLE PortfolioProject..housing
+add PropertySplitCity nvarchar(255)
+
+UPDATE PortfolioProject..housing
+set PropertySplitCity = SUBSTRING(PropertyAddress, CHARINDEX(',',PropertyAddress)+1, len(PropertyAddress))
+
+select *
+from PortfolioProject..housing
+
+
+
+select OwnerAddress
+from PortfolioProject..housing
+
+select
+PARSENAME(replace(OwnerAddress,',', '.'),3),
+PARSENAME(replace(OwnerAddress,',', '.'),2),
+PARSENAME(replace(OwnerAddress,',', '.'),1)
+from PortfolioProject..housing
+
+ALTER TABLE PortfolioProject..housing
+add OwnerSplitAddress nvarchar(255)
+
+UPDATE PortfolioProject..housing
+set OwnerSplitAddress = PARSENAME(replace(OwnerAddress,',', '.'),3)
+
+
+ALTER TABLE PortfolioProject..housing
+add OwnerSplitCity nvarchar(255)
+
+UPDATE PortfolioProject..housing
+set OwnerSplitCity = PARSENAME(replace(OwnerAddress,',', '.'),2)
+
+
+ALTER TABLE PortfolioProject..housing
+add OwnerSplitState nvarchar(255)
+
+UPDATE PortfolioProject..housing
+set OwnerSplitState = PARSENAME(replace(OwnerAddress,',', '.'),1)
+
+
+-- Change Y and N to YES and NO in 'SoldAsVAcant' field
+
+
+select distinct SoldAsVacant, COUNT(SoldAsVacant)
+from PortfolioProject..housing
+group by SoldAsVacant
+order by 2
+
+
+select SoldAsVacant,
+case when SoldAsVacant = 'Y' then 'Yes'
+     when SoldAsVacant = 'N' then 'No'
+	 else SoldAsVacant
+	 end
+from PortfolioProject..housing
+
+update PortfolioProject..housing
+set SoldAsVacant = case when SoldAsVacant = 'Y' then 'Yes'
+     when SoldAsVacant = 'N' then 'No'
+	 else SoldAsVacant
+	 end
+
+
+
+-- Remove duplicates
+
+with RowNumCTE as(         
+select *, 
+     ROW_NUMBER() over (
+	 partition by ParcelId,
+	              Propertyaddress,
+				  SaleDate,
+				  SalePrice,
+				  LegalReference
+				  order by UniqueId
+				  ) row_numb
+from PortfolioProject..housing
+)
+delete
+from RowNumCTE
+where row_numb > 1
+
+
+-- Remove Unused Columns
+
+alter table PortfolioProject..housing
+drop column OwnerAddress, TaxDistrict, PropertyAddress, SaleDate
